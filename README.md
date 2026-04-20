@@ -1,6 +1,6 @@
 # napcat-plugin-rconsole
 
-> 基于 [rconsole-plugin](https://github.com/zhiyu1998/rconsole-plugin) (Yunzai-Bot) 和 [astrbot_plugin_parser](https://github.com/Yun-Shan/astrbot_plugin_parser) (AstrBot) 重构的 NapCat 原生插件。
+> 基于 [rconsole-plugin](https://github.com/zhiyu1998/rconsole-plugin) (Yunzai-Bot) 和 [astrbot_plugin_parser](https://github.com/Zhalslar/astrbot_plugin_parser) (AstrBot) 重构的 NapCat 原生插件。
 
 多平台内容解析插件 for [NapCat](https://github.com/NapNeko/NapCatQQ)，在群聊/私聊中自动识别链接并解析内容。
 
@@ -237,7 +237,7 @@ export class MyParser extends BaseParser {
 本项目基于以下优秀项目重构：
 
 - [rconsole-plugin](https://github.com/zhiyu1998/rconsole-plugin) — 原始 Yunzai-Bot 插件，核心解析逻辑来源
-- [astrbot_plugin_parser](https://github.com/Yun-Shan/astrbot_plugin_parser) — AstrBot 解析插件，抖音/小红书解析方案参考
+- [astrbot_plugin_parser](https://github.com/Zhalslar/astrbot_plugin_parser) — AstrBot 解析插件，抖音/小红书解析方案参考
 - [NapCat Plugin Template](https://github.com/NapNeko/napcat-plugin-template) — NapCat 官方插件模板
 
 ## 📄 License
