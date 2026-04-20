@@ -7,6 +7,7 @@ import axios from 'axios';
 import { BaseParser } from './base-parser.js';
 import { seg, buildForwardNode } from '../types/parser.js';
 import { XHH_BBS_LINK, XHH_GAME_LINK, COMMON_USER_AGENT } from '../utils/api-constants.js';
+import { getXhhApiParams } from '../utils/crypto/xiaoheihe-sign.js';
 import { Downloader } from '../utils/downloader.js';
 import path from 'node:path';
 
@@ -63,8 +64,9 @@ export class XiaoheiheParser extends BaseParser {
         const cookie = this.config.xiaoheihe.cookie;
         if (cookie) (headers as any)['Cookie'] = cookie;
 
+        const params = getXhhApiParams('bbs', linkId);
         const resp = await axios.get(XHH_BBS_LINK, {
-            params: { link_id: linkId },
+            params,
             headers,
             timeout: 10000,
         });
@@ -116,8 +118,9 @@ export class XiaoheiheParser extends BaseParser {
     private async handleGame(ctx: any, event: any, appId: string): Promise<boolean> {
         const headers = { ...XHH_HEADERS };
 
+        const params = getXhhApiParams('pc', appId);
         const resp = await axios.get(XHH_GAME_LINK, {
-            params: { appid: appId },
+            params,
             headers,
             timeout: 10000,
         });

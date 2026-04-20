@@ -172,7 +172,15 @@ export class DouyinParser extends BaseParser {
         }
 
         if (!videoData) {
-            this.logDebug('loaderData keys:', Object.keys(loaderData));
+            // Debug: dump loaderData structure to help troubleshoot
+            const ldKeys = Object.keys(loaderData);
+            this.logWarn('loaderData keys:', JSON.stringify(ldKeys));
+            for (const key of ldKeys) {
+                const val = loaderData[key];
+                if (val && typeof val === 'object') {
+                    this.logWarn(`  ${key} ->`, JSON.stringify(Object.keys(val)).substring(0, 200));
+                }
+            }
             throw new Error('无法提取视频数据');
         }
 
