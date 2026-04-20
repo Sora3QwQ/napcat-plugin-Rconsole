@@ -1,0 +1,17 @@
+services:
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: always
+    environment:
+      - NAPCAT_UID=0
+      - NAPCAT_GID=0
+      - TZ=Asia/Shanghai
+    ports:
+      - "127.0.0.1:3000:3000"    # NapCat WebUI
+      - "127.0.0.1:3002:3001"    # WebUI
+      - "127.0.0.1:6099:6099"    # HTTP API
+    volumes:
+      - ./napcat/config:/app/napcat/config
+      - ./napcat/plugins:/app/napcat/plugins
+      - ./ntqq:/app/.config/QQ
