@@ -7,7 +7,7 @@ import axios from 'axios';
 import { BaseParser } from './base-parser.js';
 import { seg, buildForwardNode } from '../types/parser.js';
 import { XHH_BBS_LINK, XHH_GAME_LINK, COMMON_USER_AGENT } from '../utils/api-constants.js';
-import { getXhhApiParams } from '../utils/crypto/xiaoheihe-sign.js';
+import { getXhhBbsParams, getXhhGameParams } from '../utils/crypto/xiaoheihe-sign.js';
 import { Downloader } from '../utils/downloader.js';
 import path from 'node:path';
 
@@ -66,20 +66,30 @@ export class XiaoheiheParser extends BaseParser {
     }
 
         private async handleArticle(ctx: any, event: any, linkId: string): Promise<boolean> {
-        const headers: Record<string, string> = { ...XHH_HEADERS };
-        const cookie = this.config.xiaoheihe.cookie;
-        if (!cookie) {
-            await this.sendText(ctx, event, '未配置小黑盒Cookie，请在WebUI中填写。格式：x_xhh_tokenid=xxx');
-            return true;
-        }
-        headers['Cookie'] = cookie;
+                const headers: Record<string, string> = {
+            ...XHH_HEADERS,
+            'referer': 'https://www.xiaoheihe.cn/',
+            'origin': 'https://www.xiaoheihe.cn',
+        };
+        const cookie = this.config.xiaoheihe.cookie || '';
 
-        const params = getXhhApiParams('bbs', linkId);
-        this.logDebug('XHH API params:', JSON.stringify(params));
+        // Extract x_xhh_tokenid and derive device_id
+        const tokenMatch = /x_xhh_tokenid=([^;]+)/.exec(cookie);
+        const token = tokenMatch?.[1] || '';
+        const deviceId = token.startsWith('B') ? token.substring(1) : '';
+
+        const params = getXhhBbsParams(linkId, deviceId);
+
+                // Pass cookie separately (matching astrbot approach)
+        const cookieObj: Record<string, string> = {};
+        if (token) cookieObj['x_xhh_tokenid'] = token;
 
         const resp = await axios.get(XHH_BBS_LINK, {
             params,
-            headers,
+            headers: {
+                ...headers,
+                ...(Object.keys(cookieObj).length > 0 ? { 'Cookie': `x_xhh_tokenid=${token}` } : {}),
+            },
             timeout: 10000,
         });
 
@@ -157,7 +167,7 @@ export class XiaoheiheParser extends BaseParser {
     private async handleGame(ctx: any, event: any, appId: string): Promise<boolean> {
         const headers = { ...XHH_HEADERS };
 
-        const params = getXhhApiParams('pc', appId);
+                const params = getXhhGameParams(appId);
         const resp = await axios.get(XHH_GAME_LINK, {
             params,
             headers,
