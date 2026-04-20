@@ -78,7 +78,7 @@ napcat-plugin-rconsole/
 
 | 依赖 | 必须？ | 安装方式 | 影响范围 |
 |---|---|---|---|
-| **Node.js 18+** | ✅ 必须 | NapCat 自带 | — |
+| **Node.js 18+** | ✅ 必须 | 自行安装 | — |
 | **ffmpeg** | ✅ 强烈推荐 | `apt install ffmpeg` | B站/抖音视频合并、缩略图 |
 | **yt-dlp** | ❌ 可选 | `pip install yt-dlp` | YouTube + TikTok |
 | **tdl** | ❌ 可选 | [github](https://github.com/iyear/tdl) | Telegram |
