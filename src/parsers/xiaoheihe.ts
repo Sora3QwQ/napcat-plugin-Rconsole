@@ -26,13 +26,21 @@ export class XiaoheiheParser extends BaseParser {
         /(?:https?:\/\/)?(?:www\.)?xiaoheihe\.cn\/[A-Za-z\d._?%&+\-=\/#]*/,
     ];
 
-    async handle(ctx: any, event: any, match: RegExpExecArray): Promise<boolean> {
+        async handle(ctx: any, event: any, match: RegExpExecArray): Promise<boolean> {
         const url = event.raw_message?.trim() || '';
 
         try {
-            // Extract link_id or game info
-            const linkId = /link_id=(\d+)/.exec(url)?.[1] || /newsId=(\d+)/.exec(url)?.[1];
-            const gameId = /appid=(\d+)/.exec(url)?.[1];
+            // Extract link_id from various URL formats:
+            // /app/bbs/link/179672633
+            // /bbs/link/179672633  
+            // link_id=179672633
+            // /bbs/app/api/web/share?link_id=179672633
+            const linkId = /bbs\/link\/([a-zA-Z0-9]+)/.exec(url)?.[1]
+                || /link_id=([a-zA-Z0-9]+)/.exec(url)?.[1]
+                || /newsId=(\d+)/.exec(url)?.[1];
+
+            const gameId = /appid=(\d+)/.exec(url)?.[1]
+                || /topic\/game\/\w+\/(\d+)/.exec(url)?.[1];
 
             if (gameId) {
                 return await this.handleGame(ctx, event, gameId);
@@ -42,74 +50,105 @@ export class XiaoheiheParser extends BaseParser {
                 return await this.handleArticle(ctx, event, linkId);
             }
 
-            // Try extracting from URL path
-            const pathMatch = /\/v\d+\/bbs\/app\/link\/tree.*link_id=(\d+)/.exec(url)
-                || /\/bbs\/(\d+)/.exec(url)
-                || /\/(\d{6,})/.exec(url);
-            if (pathMatch?.[1]) {
-                return await this.handleArticle(ctx, event, pathMatch[1]);
+            // Last resort: match any long number in the URL
+            const numMatch = /(\d{6,})/.exec(url);
+            if (numMatch?.[1]) {
+                return await this.handleArticle(ctx, event, numMatch[1]);
             }
 
             await this.sendText(ctx, event, '无法提取小黑盒内容ID');
         } catch (err: any) {
             this.logError('Parse failed:', err.message);
-            await this.sendText(ctx, event, '小黑盒解析失败');
+            await this.sendText(ctx, event, '小黑盒解析失败：' + err.message);
         }
 
         return true;
     }
 
-    private async handleArticle(ctx: any, event: any, linkId: string): Promise<boolean> {
-        const headers = { ...XHH_HEADERS };
+        private async handleArticle(ctx: any, event: any, linkId: string): Promise<boolean> {
+        const headers: Record<string, string> = { ...XHH_HEADERS };
         const cookie = this.config.xiaoheihe.cookie;
-        if (cookie) (headers as any)['Cookie'] = cookie;
+        if (!cookie) {
+            await this.sendText(ctx, event, '未配置小黑盒Cookie，请在WebUI中填写。格式：x_xhh_tokenid=xxx');
+            return true;
+        }
+        headers['Cookie'] = cookie;
 
         const params = getXhhApiParams('bbs', linkId);
+        this.logDebug('XHH API params:', JSON.stringify(params));
+
         const resp = await axios.get(XHH_BBS_LINK, {
             params,
             headers,
             timeout: 10000,
         });
 
-        const data = resp.data?.result;
-        if (!data) {
-            await this.sendText(ctx, event, '小黑盒文章获取失败');
+        const respData = resp.data;
+        if (respData?.status !== 'ok' || !respData?.result) {
+            this.logWarn('XHH API response:', JSON.stringify(respData).substring(0, 500));
+            await this.sendText(ctx, event, '小黑盒帖子解析失败，请检查Cookie是否过期');
             return true;
         }
 
-        const title = data.title || '小黑盒文章';
-        const content = (data.description || '').substring(0, 500);
-        const user = data.user?.username || '未知';
-        const images = data.media_extra_info?.image_list || data.pics || [];
+        // The result contains a link object with the post data
+        const result = respData.result;
+        const link = result.link || result;
 
-        let infoText = `${this.identifyPrefix}识别：小黑盒\n📝 ${title}\n作者：${user}`;
-        if (content) infoText += `\n${content}`;
+        const title = link.title || '小黑盒帖子';
+        const user = link.user?.username || '未知';
+        const description = link.description || '';
 
-        // Cover or first image
-        const cover = data.share_pic || images[0];
+        let infoText = `${this.identifyPrefix}识别：小黑盒帖子\n👤 作者：${user}`;
+        if (title) infoText += `\n📝 ${title}`;
+        if (description) infoText += `\n${description.substring(0, 300)}`;
+
+        // Cover image
+        const cover = link.share_pic || link.img || '';
         if (cover) {
             await this.sendMixed(ctx, event, [seg.image(cover), seg.text(infoText)]);
         } else {
             await this.sendText(ctx, event, infoText);
         }
 
-        // Additional images
-        if (images.length > 1) {
-            await this.sendImagesBatched(ctx, event, images.slice(1));
-        }
+        // Content images from link_content JSON
+        try {
+            const contentImages: string[] = [];
+            if (link.link_content) {
+                const contentBlocks = typeof link.link_content === 'string'
+                    ? JSON.parse(link.link_content)
+                    : link.link_content;
+                if (Array.isArray(contentBlocks)) {
+                    for (const block of contentBlocks) {
+                        if (block.type === 'img' && block.data?.src) {
+                            contentImages.push(block.data.src);
+                        }
+                    }
+                }
+            }
+            // Also check pics array
+            const pics = link.pics || [];
+            const allImages = [...contentImages, ...pics].filter(Boolean);
+            if (allImages.length > 0) {
+                await this.sendImagesBatched(ctx, event, allImages);
+            }
+        } catch { /* ignore content parsing errors */ }
 
         // Video
-        const videoUrl = data.media_extra_info?.video?.url || data.video?.url;
-        if (videoUrl) {
+        if (link.has_video === 1 && link.video_url) {
             const cachePath = this.getCachePath(event);
             const outputPath = path.join(cachePath, 'xhh.mp4');
             try {
-                const dl = new Downloader();
-                await dl.download(videoUrl, outputPath);
+                const dl = new Downloader({ headers: { Cookie: cookie } });
+                await dl.download(link.video_url, outputPath);
                 await this.sendVideo(ctx, event, outputPath);
             } finally {
                 await this.cleanupFile(outputPath);
             }
+        }
+
+        // Game card if present
+        if (link.game_link_data?.steam_appid) {
+            await this.handleGame(ctx, event, link.game_link_data.steam_appid);
         }
 
         return true;
